@@ -1,59 +1,76 @@
 import numpy as np
 
 
-def get_greedy_policy(action_value_function):
-    """Get a greedy policy based on the action-value function."""
-    greedy_policy_dict = {}
-    for state, actions in action_value_function.items():
-        action_values = np.array(list(actions.values()))
-        act = np.array(list(actions.keys()))
-        max_value = max(action_values)
-        greedy_policy_dict[state] = act[action_values == max_value]
+class GreedyPolicy:
+    def __init__(self, action_value_function, action_space, epsilon: float = 0.1):
+        """
+        Initializes a GreedyPolicy instance.
 
-    rng = np.random.default_rng()  # Create a random number generator instance
+        Args:
+            action_value_function (dict): A dictionary representing the action-value function.
+            action_space (gym.spaces.Discrete): The action space of the environment.
+            epsilon (float): The probability of choosing a random action (exploration).
 
-    def greedy_policy(state):
-        if state not in greedy_policy_dict:
-            raise ValueError(f"State {state} not found in the action-value function.")
-        if len(greedy_policy_dict[state]) > 1:
-            return np.squeeze(
-                rng.choice(greedy_policy_dict[state])
-            ).item()  # Randomly choose among the best actions
+        """
+        self.action_value_function = action_value_function
+        self.action_space = action_space
+        self.epsilon = epsilon
+        self.greedy_policy_dict = self._create_greedy_policy_dict(
+            self.action_value_function
+        )
+        self.rng = np.random.default_rng()  # Create a random number generator instance
+        self.n = action_space.n
 
-        return np.squeeze(greedy_policy_dict[state]).item()
+    def _create_greedy_policy_dict(self, action_value_function):
+        greedy_policy_dict = {}
+        for state, actions in action_value_function.items():
+            action_values = np.array(list(actions.values()))
+            act = np.array(list(actions.keys()))
+            max_value = max(action_values)
+            greedy_policy_dict[state] = act[action_values == max_value]
+        return greedy_policy_dict
 
-    return greedy_policy
+    def update_policy(self, new_action_value_function):
+        """
+        Updates the action-value function and the greedy policy dictionary.
+        This is useful for policy iteration so you don't have to create a new instance of the GreedyPolicy class every time you want to update the policy.
 
+        Args:
+            new_action_value_function (dict): A new action-value function to update the policy.
 
-def get_epsilon_greedy_policy(action_value_function, all_actions, epsilon: float = 0.1):
-    """Get a greedy policy based on the action-value function."""
-    greedy_policy_dict = {}
-    for state, actions in action_value_function.items():
-        action_values = np.array(list(actions.values()))
-        act = np.array(list(actions.keys()))
-        max_value = max(action_values)
-        greedy_policy_dict[state] = act[action_values == max_value]
+        """
+        self.action_value_function = new_action_value_function
+        self.greedy_policy_dict = self._create_greedy_policy_dict(
+            self.action_value_function
+        )
+    
+    def __call__(self, state, epsilon=None):
+        if epsilon is None:
+            epsilon = self.epsilon
+        adjusted_epsilon = (
+            epsilon * (self.n / (self.n - 1))
+        )  # Adjust epsilon based so we can just draw from all states and not have to worry about the greedy action being drawn.
 
-    adjusted_epsilon = (
-        epsilon * (len(all_actions) / (len(all_actions) - 1))
-    )  # Adjust epsilon based so we can just draw from all states and not have to worry about the greedy action being drawn.
+        if state not in self.greedy_policy_dict:
+            return self.action_space.sample()  # If the state is not in the action-value function, choose a random action
+        choose_greedy = (
+            self.rng.random() > adjusted_epsilon
+        )  # With probability epsilon, choose a random action
+        if choose_greedy:
+            if len(self.greedy_policy_dict[state]) > 1:
+                return np.squeeze(
+                    self.rng.choice(self.greedy_policy_dict[state])
+                ).item()  # Randomly choose among the best actions
 
-    rng = np.random.default_rng()  # Create a random number generator instance
+            return np.squeeze(self.greedy_policy_dict[state]).item()
+        else:
+            return self.action_space.sample()  # Randomly choose among all actions
 
-    def greedy_policy(state):
-        if state not in greedy_policy_dict:
-            return np.squeeze(
-                rng.choice(all_actions)
-            ).item()  # If the state is not in the action-value function, choose a random action
-        if (
-            rng.random() < adjusted_epsilon
-        ):  # With probability epsilon, choose a random action
-            return np.squeeze(rng.choice(all_actions)).item()
-
-        if len(greedy_policy_dict[state]) > 1:
-            return np.squeeze(
-                np.random.choice(greedy_policy_dict[state])
-            ).item()  # Randomly choose among the best actions
-        return np.squeeze(greedy_policy_dict[state]).item()
-
-    return greedy_policy
+    def __equals__(self, other):
+        if not isinstance(other, GreedyPolicy):
+            return False
+        return (
+            self.greedy_policy_dict == other.greedy_policy_dict
+            and self.action_space == other.action_space
+            and self.epsilon == other.epsilon
+        )

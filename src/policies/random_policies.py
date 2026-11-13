@@ -1,12 +1,17 @@
 import numpy as np
 
 
-def global_random_policy(env):
-    """A global random policy that selects actions uniformly at random. Assumes all actions are possible in all states.
-    Expects enb to have an attribute 'action_set' which is a Literal of possible actions."""
-    action_set = env.action_set
+class RandomPolicy:
+    def __init__(self, action_space):
+        """
+        Initializes a RandomPolicy instance.
 
-    def policy(state):
-        return np.random.choice(action_set.__args__)
+        Args:
+            action_space (gym.spaces.Discrete): The action space of the environment.
 
-    return policy
+        """
+        self.action_space = action_space
+        self.rng = np.random.default_rng()  # Create a random number generator instance
+
+    def __call__(self, state):
+        return self.action_space.sample()  # Randomly choose among all actions
